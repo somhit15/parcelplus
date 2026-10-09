@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     order_simulator_enabled: bool = True
     order_simulator_interval_seconds: float = 5.0
     payment_failure_rate: float = 0.03
-    otel_enabled: bool = False
+    otel_enabled: bool = True
     otel_service_name: str = "parcelpulse"
     otel_exporter_otlp_endpoint: str = "http://localhost:4318"
 
