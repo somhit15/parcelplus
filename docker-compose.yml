@@ -39,6 +39,7 @@ services:
       APP_ENV: docker
       OTEL_ENABLED: ${OTEL_ENABLED:-false}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
+      OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE: delta
       ORDER_SERVICE_URL: http://order-service:8001
       CUSTOMER_SERVICE_URL: http://customer-service:8002
       ANALYTICS_SERVICE_URL: http://analytics-service:8007

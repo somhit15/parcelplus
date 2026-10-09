@@ -8,6 +8,7 @@ receivers:
 
 processors:
   batch:
+  cumulativetodelta:
 
 exporters:
   otlphttp/dynatrace:
@@ -23,7 +24,7 @@ service:
       exporters: [otlphttp/dynatrace]
     metrics:
       receivers: [otlp]
-      processors: [batch]
+      processors: [cumulativetodelta, batch]
       exporters: [otlphttp/dynatrace]
     logs:
       receivers: [otlp]
