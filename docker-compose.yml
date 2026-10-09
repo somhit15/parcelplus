@@ -1,0 +1,103 @@
+services:
+  frontend:
+    build: ./frontend
+    ports: ["3000:80"]
+    depends_on: [gateway]
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: parcelpulse
+      POSTGRES_USER: parcelpulse
+      POSTGRES_PASSWORD: parcelpulse
+    ports: ["5432:5432"]
+    volumes: ["parcelpulse-postgres:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U parcelpulse -d parcelpulse"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: parcelpulse
+      RABBITMQ_DEFAULT_PASS: parcelpulse
+    ports: ["5672:5672", "15672:15672"]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  gateway:
+    build: {context: ., dockerfile: Dockerfile}
+    command: uvicorn services.gateway.main:app --host 0.0.0.0 --port 8000
+    environment: &service-env
+      DATABASE_URL: postgresql://parcelpulse:parcelpulse@postgres:5432/parcelpulse
+      RABBITMQ_URL: amqp://parcelpulse:parcelpulse@rabbitmq:5672/
+      APP_ENV: docker
+      OTEL_ENABLED: ${OTEL_ENABLED:-false}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
+      ORDER_SERVICE_URL: http://order-service:8001
+      CUSTOMER_SERVICE_URL: http://customer-service:8002
+      ANALYTICS_SERVICE_URL: http://analytics-service:8007
+      SCENARIO_SERVICE_URL: http://scenario-service:8008
+      SERVICE_NAME: api-gateway
+    ports: ["8000:8000"]
+    depends_on: {postgres: {condition: service_healthy}, rabbitmq: {condition: service_healthy}}
+
+  order-service:
+    build: {context: ., dockerfile: Dockerfile}
+    command: uvicorn services.order_service.main:app --host 0.0.0.0 --port 8001
+    environment: {<<: *service-env, SERVICE_NAME: order-service, PORT: "8001"}
+    depends_on: {postgres: {condition: service_healthy}, rabbitmq: {condition: service_healthy}}
+  customer-service:
+    build: {context: ., dockerfile: Dockerfile}
+    command: uvicorn services.customer_service.main:app --host 0.0.0.0 --port 8002
+    environment: {<<: *service-env, SERVICE_NAME: customer-service, PORT: "8002"}
+    depends_on: {postgres: {condition: service_healthy}}
+  payment-service:
+    build: {context: ., dockerfile: Dockerfile}
+    command: uvicorn services.payment_service.main:app --host 0.0.0.0 --port 8003
+    environment: {<<: *service-env, SERVICE_NAME: payment-service, PORT: "8003"}
+    depends_on: {postgres: {condition: service_healthy}, rabbitmq: {condition: service_healthy}}
+  dispatch-service:
+    build: {context: ., dockerfile: Dockerfile}
+    command: uvicorn services.dispatch_service.main:app --host 0.0.0.0 --port 8004
+    environment: {<<: *service-env, SERVICE_NAME: dispatch-service, PORT: "8004"}
+    depends_on: {postgres: {condition: service_healthy}, rabbitmq: {condition: service_healthy}}
+  tracking-service:
+    build: {context: ., dockerfile: Dockerfile}
+    command: uvicorn services.tracking_service.main:app --host 0.0.0.0 --port 8005
+    environment: {<<: *service-env, SERVICE_NAME: tracking-service, PORT: "8005"}
+    depends_on: {postgres: {condition: service_healthy}, rabbitmq: {condition: service_healthy}}
+  notification-service:
+    build: {context: ., dockerfile: Dockerfile}
+    command: uvicorn services.notification_service.main:app --host 0.0.0.0 --port 8006
+    environment: {<<: *service-env, SERVICE_NAME: notification-service, PORT: "8006"}
+    depends_on: {postgres: {condition: service_healthy}, rabbitmq: {condition: service_healthy}}
+  analytics-service:
+    build: {context: ., dockerfile: Dockerfile}
+    command: uvicorn services.analytics_service.main:app --host 0.0.0.0 --port 8007
+    environment: {<<: *service-env, SERVICE_NAME: analytics-service, PORT: "8007"}
+    depends_on: {postgres: {condition: service_healthy}, rabbitmq: {condition: service_healthy}}
+  scenario-service:
+    build: {context: ., dockerfile: Dockerfile}
+    command: uvicorn services.scenario_service.main:app --host 0.0.0.0 --port 8008
+    environment: {<<: *service-env, SERVICE_NAME: scenario-service, PORT: "8008"}
+    depends_on: {postgres: {condition: service_healthy}, rabbitmq: {condition: service_healthy}}
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.116.1
+    profiles: [observability]
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    environment:
+      DT_ENDPOINT: ${DT_ENDPOINT:-}
+      DT_API_TOKEN: ${DT_API_TOKEN:-}
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
+    ports: ["4317:4317", "4318:4318"]
+
+volumes:
+  parcelpulse-postgres:
